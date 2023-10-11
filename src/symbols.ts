@@ -1,0 +1,86 @@
+// module name
+import * as vscode from 'vscode';
+import { DocumentSymbol } from 'vscode';
+
+//
+export async function getDocumentSymbol(uri: vscode.Uri) {
+  const documentSymbol: DocumentSymbol[] = [];
+  await updateDocumentTree(uri, documentSymbol);
+  return documentSymbol;
+}
+
+//
+export async function updateDocumentTree(uri: vscode.Uri, documentSymbol: DocumentSymbol[]) {
+  // if is supported file type?
+  const supportExtensions = 'mdx';
+  const supportExtensionArray = supportExtensions.split(',').map((l) => l.toLowerCase());
+  const fileSplitByDot = uri.fsPath.split('.');
+  const targetFileType = fileSplitByDot.length > 1 ? fileSplitByDot.pop()?.toLowerCase() : '';
+  if (!supportExtensionArray.includes(targetFileType ?? '')) {
+    return;
+  }
+
+  const indexingWord = '^(#+)\\s*(.*)';
+
+  const indexingReg = RegExp(indexingWord, 'i');
+
+  const isHierarchy = true;
+
+  const hierarchyIndexes = new Map<number, DocumentSymbol>();
+
+  // main
+  await parseFile(uri, documentSymbol);
+
+  async function parseFile(uri: vscode.Uri, documentSymbol: DocumentSymbol[]) {
+    let textDocument: vscode.TextDocument | undefined;
+    await vscode.workspace.openTextDocument(uri).then((document) => {
+      textDocument = document;
+    });
+
+    if (!textDocument) {
+      return;
+    }
+
+    try {
+      for (let line = 0; line < textDocument.lineCount; line++) {
+        parseLine(textDocument, line, documentSymbol);
+      }
+    } catch (e) {
+      console.log(e);
+    }
+  }
+
+  function parseLine(
+    document: vscode.TextDocument,
+    line: number,
+    documentSymbol: DocumentSymbol[]
+  ) {
+    const textLine = document.lineAt(line);
+    const matches = textLine.text.match(indexingReg);
+    if (matches && matches[2]) {
+      const symbol = new DocumentSymbol(
+        matches[2],
+        '',
+        vscode.SymbolKind.String,
+        textLine.range,
+        textLine.range
+      );
+
+      let hierarchyIndex = matches[1].toString().length;
+      const maxIndex = 5;
+      hierarchyIndex > maxIndex && (hierarchyIndex = maxIndex);
+      hierarchyIndexes.set(hierarchyIndex, symbol);
+
+      let parentSymbol;
+      for (let i = 1; i < hierarchyIndex; i++) {
+        hierarchyIndexes.get(i) && (parentSymbol = hierarchyIndexes.get(i));
+      }
+      // add to root collections or parent
+      if (parentSymbol && isHierarchy) {
+        parentSymbol.children.push(symbol);
+      } else {
+        documentSymbol.push(symbol);
+      }
+    }
+  }
+}
