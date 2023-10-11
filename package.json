@@ -7,7 +7,7 @@
   "author": {
     "name": "toramame-seven"
   },
-  "icon": "images/battools.png",
+  "icon": "images/mdx-outline-mini.png",
   "license": "MIT",
   "engines": {
     "vscode": "^1.71.0"
