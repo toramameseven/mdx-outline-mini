@@ -20,13 +20,10 @@ export async function updateDocumentTree(uri: vscode.Uri, documentSymbol: Docume
     return;
   }
 
-  const indexingWord = '^(#+)\\s*(.*)';
-
-  const indexingReg = RegExp(indexingWord, 'i');
-
-  const isHierarchy = true;
 
   const hierarchyIndexes = new Map<number, DocumentSymbol>();
+
+  type Options = { inCode: boolean; indexingReg: RegExp; codeReg: RegExp; isHierarchy: boolean };
 
   // main
   await parseFile(uri, documentSymbol);
@@ -41,9 +38,16 @@ export async function updateDocumentTree(uri: vscode.Uri, documentSymbol: Docume
       return;
     }
 
+    const status: Options = {
+      inCode: false,
+      indexingReg: RegExp('^(#+)\\s*(.*)', 'i'),
+      codeReg: RegExp('^```.*'),
+      isHierarchy: true,
+    };
+
     try {
       for (let line = 0; line < textDocument.lineCount; line++) {
-        parseLine(textDocument, line, documentSymbol);
+        parseLine(textDocument, line, status, documentSymbol);
       }
     } catch (e) {
       console.log(e);
@@ -53,20 +57,31 @@ export async function updateDocumentTree(uri: vscode.Uri, documentSymbol: Docume
   function parseLine(
     document: vscode.TextDocument,
     line: number,
+    status: Options,
     documentSymbol: DocumentSymbol[]
   ) {
     const textLine = document.lineAt(line);
-    const matches = textLine.text.match(indexingReg);
-    if (matches && matches[2]) {
+    const codeMatches = textLine.text.match(status.codeReg);
+
+    if (codeMatches){
+      status.inCode = !status.inCode;
+    }
+
+    if (status.inCode){
+      return;
+    }
+
+    const headingMatches = textLine.text.match(status.indexingReg);
+    if (headingMatches && headingMatches[2]) {
       const symbol = new DocumentSymbol(
-        matches[2],
+        headingMatches[2],
         '',
         vscode.SymbolKind.String,
         textLine.range,
         textLine.range
       );
 
-      let hierarchyIndex = matches[1].toString().length;
+      let hierarchyIndex = headingMatches[1].toString().length;
       const maxIndex = 5;
       hierarchyIndex > maxIndex && (hierarchyIndex = maxIndex);
       hierarchyIndexes.set(hierarchyIndex, symbol);
@@ -76,7 +91,7 @@ export async function updateDocumentTree(uri: vscode.Uri, documentSymbol: Docume
         hierarchyIndexes.get(i) && (parentSymbol = hierarchyIndexes.get(i));
       }
       // add to root collections or parent
-      if (parentSymbol && isHierarchy) {
+      if (parentSymbol && status.isHierarchy) {
         parentSymbol.children.push(symbol);
       } else {
         documentSymbol.push(symbol);

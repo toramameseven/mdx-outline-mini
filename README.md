@@ -13,6 +13,7 @@ This is the mdx-outline-mini.
 ## Features
 
 - Create outline for a mdx file.
+- This does not work for mdx comments. `{/* */}`
 
 ## How to build
 
